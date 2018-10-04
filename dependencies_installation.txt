@@ -1,0 +1,18 @@
+
+Se quiser criar uma virtual env:
+    sudo apt install python-env
+    1 - Entre no terminal na pasta do projeto
+    2 - python3 -m venv face-env
+    3 - cd face-env
+    4 - source bin/activate
+
+Instalação das dependencias:
+    pip3 install cmake
+    pip3 install face_recognition
+    pip3 install opencv-python
+    pip3 install mss
+    pip3 install sklearn
+    pip3 install scipy
+    pip3 install Xlib
+    pip3 install pyautogui
+    pip3 install pymongo
