@@ -4,9 +4,13 @@ import os.path
 import shutil
 import numpy as np
 import time
-from pymongo import MongoClient
+import psycopg2
 from random import randint
 from face_recognition.face_recognition_cli import image_files_in_folder
+
+con = psycopg2.connect(host='localhost', database='IAmHere', user='postgres', password='leds123')
+cursor = con.cursor()
+
 
 def get_train_data(train_dir,verbose=False):
     """
@@ -25,36 +29,20 @@ def get_train_data(train_dir,verbose=False):
         └── ...
     """
 
-    cliente = MongoClient('localhost', 27017)
-    banco = cliente.face_encodings
-
-    group = banco.group
-
-    for doc in group.find():
-        print(doc)
-
-    person_group = {}
-
     # X é uma lista de 'encodings' dos rostos das pessoas
     # Y é uma lista com o nome das pessoas
     # 
 
-    #X, y = get_persons_encondings(banco.group.find(), [], [])
-
-    X, y = [],[]
-
     # Se existir os arquivos com os dados, carrega os dados
-    '''if os.path.isfile("X.npy"): X = np.load("X.npy").tolist()
+    if os.path.isfile("X.npy"): X = np.load("X.npy").tolist()
     else: X = []
 
     if os.path.isfile("y.npy"): y = np.load("y.npy").tolist()
     else: y = []
-    '''
  
     
     # Passa por todas a pessoas
     for class_dir in os.listdir(train_dir):
-        person = {}
 
         #Se não for um diretório pula para o próximo loop
         if not os.path.isdir(os.path.join(train_dir, class_dir)):
@@ -77,24 +65,16 @@ def get_train_data(train_dir,verbose=False):
                 # Faz um 'enconding da face e adiciona na lista de faces'
                 enconding = face_recognition.face_encodings(image, known_face_locations=face_bounding_boxes)[0]
 
-                person[str(int(time.time()))] = enconding.tolist()
-
                 X.append(enconding)
                 # Adiciona o nome da pessoa na lista de nome de pessoas
                 y.append(class_dir)
 
-        person_group[class_dir] = person
-
         #Apaga a pasta quando terminar de processa-lá
         shutil.rmtree(train_dir+"/"+class_dir)
 
-    group.insert_one(person_group)
-
     # Salva a lista em arquivos
-    '''
     np.save("X.npy",X)
     np.save("y.npy",y)
-    '''
     
     return X, y
 
@@ -104,14 +84,21 @@ def get_data(parent, collection, verbose):
     collection_dict = {}
     X, y = [], []
     if os.path.isdir(path):
+        collection_path = path.replace("/",".") if parent != "" else collection
+        sql = "INSERT INTO collection (nome, path) VALUES ('%s','%s')" % (collection, collection_path)
+        sql = sql + " RETURNING id;"
+        cursor.execute(sql)
+        id_collection = cursor.fetchone()[0]
 
+        con.commit()
+        
         for subcollection in os.listdir(path):
             sub_dict, sub_x, sub_y = get_data(path, subcollection, verbose)
 
             X, y = X + sub_x, y + sub_y
 
             if (len(sub_dict) == 0): 
-                collection_dict, sub_x, sub_y = get_person_encondings(collection,path,verbose)
+                collection_dict, sub_x, sub_y = get_person_encondings(id_collection,collection,path,verbose)
                 X, y = X + sub_x, y + sub_y
                 break
             
@@ -126,9 +113,11 @@ def get_data(parent, collection, verbose):
     else:
         return {}, [], []
 
-def get_person_encondings(collection,path, verbose):
+def get_person_encondings(fk_collection, collection, path, verbose):
     doc = []
     X = []
+
+
     for img_path in image_files_in_folder(path):
         # Carrega a imagem, descobre as faces e seus limites 
         # Ex: [(x1,y1,w1,h1), (x2,y2,w2,h2), ...]
@@ -146,22 +135,23 @@ def get_person_encondings(collection,path, verbose):
 
             doc.append(enconding.tolist())
 
+            str_enc = str(enconding.tolist()).replace("[","{").replace("]","}")
+            sql = "INSERT INTO face_encoding (fk_collection, encod) VALUES "
+            sql = sql + ("(%d" % fk_collection) + ",'" + str_enc + "')"
+
+            cursor.execute(sql)
+            con.commit()
+
             X.append(enconding)
 
     return doc, X, [collection]  * len(X)
 
-def get_persons_encondings(doc , X, y):
-    if len(doc.collection_names()) > 0: # É uma coleção
-        for subcollection in doc.collection_names():
-            X, y = get_persons_encondings(subcollection, X, y)
-    else:
-        documents = get_documents_data(doc)
+def get_data_from_db(collection):
+    sql = "SELECT nome, encod FROM face_encoding "
+    sql = sql + "INNER JOIN collection on (face_encoding.fk_collection = collection.id) "
+    sql = sql + "WHERE '" + collection +"' @> path"
 
-    return X + documents, y + [doc * len(documents)]
+    cursor.execute(sql)
+    dados = cursor.fetchall()
 
-def get_documents_data(collection):
-    X = []
-    for document in collection.find():
-        X.append(np.array(document))
-
-    return X
+    return[sublist[1] for sublist in dados], [sublist[0] for sublist in dados]

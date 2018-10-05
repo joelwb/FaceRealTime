@@ -1,0 +1,25 @@
+﻿create extension ltree;
+
+create table collection(
+	id serial primary key,
+	nome varchar(100),
+	path ltree
+);
+create index collection_path_idx on collection using gist (path);
+
+create table face_encoding(
+	id serial primary key,
+	encod real[],
+	fk_collection integer,
+	foreign key (fk_collection) references collection(id)
+);
+
+delete from face_encoding;
+delete from collection;
+
+select * from collection;
+select * from face_encoding;
+
+select nome, encod from face_encoding 
+inner join collection on (face_encoding.fk_collection = collection.id)
+where 'IFES.Serra.Alunos' @> path;

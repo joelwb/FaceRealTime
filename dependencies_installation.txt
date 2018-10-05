@@ -15,4 +15,17 @@ Instalação das dependencias:
     pip3 install scipy
     pip3 install Xlib
     pip3 install pyautogui
-    pip3 install pymongo
+    pip3 install psycopg2
+
+python3 -m venv face-env
+cd face-env
+source bin/activate
+pip3 install cmake
+pip3 install face_recognition
+pip3 install opencv-python
+pip3 install mss
+pip3 install sklearn
+pip3 install scipy
+pip3 install Xlib
+pip3 install pyautogui
+pip3 install psycopg2
